@@ -12,7 +12,7 @@ from youtube_transcript_api.formatters import TextFormatter
 
 
 class YouTubeDownloader:
-	def __init__(self, output_dir: str = 'downloads'):
+	def __init__(self, output_dir: str = '.'):
 		self.output_dir = Path(output_dir)
 		self.output_dir.mkdir(exist_ok=True)
 	
@@ -78,7 +78,7 @@ class YouTubeDownloader:
 			print(f'Error descargando audio: {e}')
 			sys.exit(1)
 	
-	def download_transcript(self, url: str, language: str = 'es') -> None:
+	def download_transcript(self, url: str, language: Optional[str] = None) -> None:
 		"""Download video transcript"""
 		try:
 			video_id = self.get_video_id(url)
@@ -89,16 +89,19 @@ class YouTubeDownloader:
 				info = ydl.extract_info(url, download=False)
 				title = info.get('title', 'transcripcion_sin_titulo')
 			
-			# Try to get transcript in specified language
-			api = YouTubeTranscriptApi()
-			try:
-				transcript_list = api.fetch(video_id, languages=[language])
-			except Exception:
-				# Fallback to any available language
-				available_transcripts = api.list(video_id)
-				transcript = available_transcripts.find_transcript(['es', 'en'])
-				transcript_list = transcript.fetch()
-				print(f'Transcripción obtenida en idioma: {transcript.language}')
+			available_transcripts = YouTubeTranscriptApi().list(video_id)
+			transcript = None
+			if language:
+				try:
+					transcript = available_transcripts.find_transcript([language])
+				except Exception:
+					print(f'No hay transcripción en "{language}", se usa el idioma original del video')
+			if transcript is None:
+				# The auto-generated transcript is in the spoken (original) language
+				transcripts = list(available_transcripts)
+				transcript = next((t for t in transcripts if t.is_generated), transcripts[0])
+			transcript_list = transcript.fetch()
+			print(f'Transcripción obtenida en idioma: {transcript.language}')
 			
 			# Format transcript
 			formatter = TextFormatter()
@@ -145,7 +148,7 @@ Ejemplos de uso:
 	)
 	
 	parser.add_argument('url', help='URL del video de YouTube')
-	parser.add_argument('--output-dir', default='downloads', help='Directorio de salida (default: downloads)')
+	parser.add_argument('--output-dir', default='.', help='Directorio de salida (default: directorio actual)')
 	
 	# Download options
 	group = parser.add_mutually_exclusive_group(required=True)
@@ -158,7 +161,7 @@ Ejemplos de uso:
 	parser.add_argument('--quality', default='best', help='Calidad del video (default: best)')
 	parser.add_argument('--audio-format', default='mp3', choices=['mp3', 'wav', 'ogg', 'm4a'], 
 						help='Formato de audio (default: mp3)')
-	parser.add_argument('--language', default='es', help='Idioma de la transcripción (default: es)')
+	parser.add_argument('--language', help='Idioma de la transcripción (default: idioma original del video)')
 	
 	args = parser.parse_args()
 	
