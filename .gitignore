@@ -1,0 +1,12 @@
+downloads/
+__pycache__/
+*.egg-info/
+build/
+dist/
+.venv/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+graft/
+.atl/
+.ignore
