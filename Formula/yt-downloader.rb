@@ -4,7 +4,7 @@ class YtDownloader < Formula
   desc "Download YouTube videos, audio or transcripts"
   homepage "https://github.com/pookdeveloper/youtube-downloader"
   url "https://github.com/pookdeveloper/youtube-downloader/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "REPLACE_WITH_RELEASE_TARBALL_SHA256"
+  sha256 "315a824683a8e7ddde8be686f2959edab991c9a02c61762f3d3e7204618ba777"
   head "https://github.com/pookdeveloper/youtube-downloader.git", branch: "main"
 
   depends_on "deno"
