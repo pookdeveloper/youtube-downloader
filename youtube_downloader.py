@@ -6,15 +6,24 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+import requests
 import yt_dlp
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.formatters import TextFormatter
 
 
 class YouTubeDownloader:
-	def __init__(self, output_dir: str = '.'):
+	def __init__(self, output_dir: str = '.', cookies_from_browser: Optional[str] = None,
+				 cookies: Optional[str] = None):
 		self.output_dir = Path(output_dir)
 		self.output_dir.mkdir(exist_ok=True)
+		# YouTube blocks anonymous requests ("Sign in to confirm you're not a bot"); cookies authenticate them
+		self.cookie_opts = {}
+		if cookies_from_browser:
+			browser, _, profile = cookies_from_browser.partition(':')
+			self.cookie_opts['cookiesfrombrowser'] = (browser, profile or None)
+		if cookies:
+			self.cookie_opts['cookiefile'] = cookies
 	
 	def get_video_id(self, url: str) -> str:
 		"""Extract video ID from YouTube URL"""
@@ -41,6 +50,7 @@ class YouTubeDownloader:
 			'format': quality,
 			'outtmpl': str(self.output_dir / '%(upload_date)s_%(title)s.%(ext)s'),
 			'ignoreerrors': True,
+			**self.cookie_opts,
 		}
 		
 		try:
@@ -65,6 +75,7 @@ class YouTubeDownloader:
 				'preferredquality': '192',
 			}],
 			'ignoreerrors': True,
+			**self.cookie_opts,
 		}
 		
 		try:
@@ -84,12 +95,14 @@ class YouTubeDownloader:
 			video_id = self.get_video_id(url)
 			
 			# Get video info for title
-			ydl_opts = {'quiet': True, 'no_warnings': True}
+			ydl_opts = {'quiet': True, 'no_warnings': True, **self.cookie_opts}
+			http_client = requests.Session()
 			with yt_dlp.YoutubeDL(ydl_opts) as ydl:
 				info = ydl.extract_info(url, download=False)
 				title = info.get('title', 'transcripcion_sin_titulo')
+				http_client.cookies = ydl.cookiejar
 			
-			available_transcripts = YouTubeTranscriptApi().list(video_id)
+			available_transcripts = YouTubeTranscriptApi(http_client=http_client).list(video_id)
 			transcript = None
 			if language:
 				try:
@@ -126,7 +139,7 @@ class YouTubeDownloader:
 	
 	def get_video_formats(self, url: str) -> None:
 		"""Show available video formats"""
-		ydl_opts = {'listformats': True, 'quiet': False}
+		ydl_opts = {'listformats': True, 'quiet': False, **self.cookie_opts}
 		try:
 			with yt_dlp.YoutubeDL(ydl_opts) as ydl:
 				ydl.extract_info(url, download=False)
@@ -144,6 +157,7 @@ Ejemplos de uso:
   %(prog)s --audio https://youtube.com/watch?v=VIDEO_ID --audio-format mp3
   %(prog)s --transcript https://youtube.com/watch?v=VIDEO_ID --language es
   %(prog)s --formats https://youtube.com/watch?v=VIDEO_ID
+  %(prog)s --transcript https://youtube.com/watch?v=VIDEO_ID --cookies-from-browser brave
 		'''
 	)
 	
@@ -162,10 +176,13 @@ Ejemplos de uso:
 	parser.add_argument('--audio-format', default='mp3', choices=['mp3', 'wav', 'ogg', 'm4a'], 
 						help='Formato de audio (default: mp3)')
 	parser.add_argument('--language', help='Idioma de la transcripción (default: idioma original del video)')
+	parser.add_argument('--cookies-from-browser', metavar='BROWSER[:PROFILE]',
+						help='Usar cookies del navegador (brave, chrome, firefox, safari, edge...) para evitar el bloqueo "not a bot"')
+	parser.add_argument('--cookies', metavar='FILE', help='Archivo de cookies en formato Netscape')
 	
 	args = parser.parse_args()
 	
-	downloader = YouTubeDownloader(args.output_dir)
+	downloader = YouTubeDownloader(args.output_dir, args.cookies_from_browser, args.cookies)
 	
 	try:
 		if args.video:
